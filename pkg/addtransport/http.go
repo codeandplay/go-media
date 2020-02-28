@@ -60,6 +60,13 @@ func NewHTTPHandler(endpoints addendpoint.Set, otTracer stdopentracing.Tracer, z
 		encodeHTTPGenericResponse,
 		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "Concat", logger)))...,
 	))
+
+	m.Handle("/ping", httptransport.NewServer(
+		endpoints.PingEndpoint,
+		decodeHTTPPingRequest,
+		encodeHTTPGenericResponse,
+		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "Ping", logger)))...,
+	))
 	return m
 }
 
@@ -141,12 +148,35 @@ func NewHTTPClient(instance string, otTracer stdopentracing.Tracer, zipkinTracer
 		}))(concatEndpoint)
 	}
 
+	// The Ping endpoint is the same thing, with slightly different
+	// middlewares to demonstrate how to specialize per-endpoint.
+	var pingEndpoint endpoint.Endpoint
+	{
+		pingEndpoint = httptransport.NewClient(
+			"GET",
+			copyURL(u, "/ping"),
+			encodeHTTPGenericRequest,
+			decodeHTTPPingResponse,
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint()
+		pingEndpoint = opentracing.TraceClient(otTracer, "Ping")(pingEndpoint)
+		if zipkinTracer != nil {
+			pingEndpoint = zipkin.TraceEndpoint(zipkinTracer, "Ping")(pingEndpoint)
+		}
+		pingEndpoint = limiter(pingEndpoint)
+		pingEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:    "Ping",
+			Timeout: 10 * time.Second,
+		}))(pingEndpoint)
+	}
+
 	// Returning the endpoint.Set as a service.Service relies on the
 	// endpoint.Set implementing the Service methods. That's just a simple bit
 	// of glue code.
 	return addendpoint.Set{
 		SumEndpoint:    sumEndpoint,
 		ConcatEndpoint: concatEndpoint,
+		PingEndpoint:   pingEndpoint,
 	}, nil
 }
 
@@ -199,6 +229,13 @@ func decodeHTTPConcatRequest(_ context.Context, r *http.Request) (interface{}, e
 	return req, err
 }
 
+// decodeHTTPPingRequest is a transport/http.DecodeRequestFunc that decodes a
+// JSON-encoded concat request from the HTTP request body. Primarily useful in a
+// server.
+func decodeHTTPPingRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	return addendpoint.PingRequest{}, nil
+}
+
 // decodeHTTPSumResponse is a transport/http.DecodeResponseFunc that decodes a
 // JSON-encoded sum response from the HTTP response body. If the response has a
 // non-200 status code, we will interpret that as an error and attempt to decode
@@ -223,6 +260,20 @@ func decodeHTTPConcatResponse(_ context.Context, r *http.Response) (interface{},
 		return nil, errors.New(r.Status)
 	}
 	var resp addendpoint.ConcatResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
+	return resp, err
+}
+
+// decodeHTTPPingResponse is a transport/http.DecodeResponseFunc that decodes
+// a JSON-encoded concat response from the HTTP response body. If the response
+// has a non-200 status code, we will interpret that as an error and attempt to
+// decode the specific error message from the response body. Primarily useful in
+// a client.
+func decodeHTTPPingResponse(_ context.Context, r *http.Response) (interface{}, error) {
+	if r.StatusCode != http.StatusOK {
+		return nil, errors.New(r.Status)
+	}
+	var resp addendpoint.PingResponse
 	err := json.NewDecoder(r.Body).Decode(&resp)
 	return resp, err
 }

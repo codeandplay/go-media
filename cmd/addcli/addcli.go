@@ -36,11 +36,11 @@ func main() {
 		zipkinBridge   = fs.Bool("zipkin-ot-bridge", false, "Use Zipkin OpenTracing bridge instead of native implementation")
 		lightstepToken = fs.String("lightstep-token", "", "Enable LightStep tracing via a LightStep access token")
 		appdashAddr    = fs.String("appdash-addr", "", "Enable Appdash tracing via an Appdash server host:port")
-		method         = fs.String("method", "sum", "sum, concat")
+		method         = fs.String("method", "sum", "sum, concat, ping")
 	)
 	fs.Usage = usageFor(fs, os.Args[0]+" [flags] <a> <b>")
 	fs.Parse(os.Args[1:])
-	if len(fs.Args()) != 2 {
+	if len(fs.Args()) != 2 && *method != "ping" {
 		fs.Usage()
 		os.Exit(1)
 	}
@@ -117,6 +117,14 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "%q + %q = %q\n", a, b, v)
+
+	case "ping":
+		v, err := svc.Ping(context.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stdout, "ping: %v\n", v)
 
 	default:
 		fmt.Fprintf(os.Stderr, "error: invalid method %q\n", *method)

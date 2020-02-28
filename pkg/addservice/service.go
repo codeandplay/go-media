@@ -6,12 +6,15 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
+
+	"ray.vhatt/todo-gokit/pkg/store"
 )
 
 // Service describe a service that adds things together
 type Service interface {
 	Sum(ctx context.Context, a, b int) (int, error)
 	Concat(ctx context.Context, a, b string) (string, error)
+	Ping(ctx context.Context) (string, error)
 }
 
 // New return a basic Service with all the expected middlewares wired in.
@@ -42,10 +45,15 @@ var (
 
 // NewBasicService return a naive, stateless implementation of Service.
 func NewBasicService() Service {
-	return basicService{}
+	dbStore, _ := store.NewMongoStore("mongodb://localhost:27017", "gokit-test", "todolist")
+	return basicService{
+		dbStore: dbStore,
+	}
 }
 
-type basicService struct{}
+type basicService struct {
+	dbStore store.Store
+}
 
 const (
 	intMax = 1<<31 - 1
@@ -71,4 +79,12 @@ func (s basicService) Concat(_ context.Context, a, b string) (string, error) {
 		return "", ErrMaxSizeExceeded
 	}
 	return a + b, nil
+}
+
+func (s basicService) Ping(ctx context.Context) (string, error) {
+	err := s.dbStore.Ping(ctx)
+	if err != nil {
+		return "down", nil
+	}
+	return "up", nil
 }

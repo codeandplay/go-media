@@ -38,6 +38,14 @@ func (mw loggingMiddleware) Concat(ctx context.Context, a, b string) (v string, 
 	return mw.next.Concat(ctx, a, b)
 }
 
+func (mw loggingMiddleware) Ping(ctx context.Context) (v string, err error) {
+	defer func() {
+		mw.logger.Log("method", "Ping", "v", v, "err", err)
+	}()
+
+	return mw.next.Ping(ctx)
+}
+
 // InstrumentingMiddleware returns a service middleware that instruments
 // the number of integers summed and characters concatenated over the lifetime of
 // the service.
@@ -66,5 +74,11 @@ func (mw instrumentingMiddleware) Sum(ctx context.Context, a, b int) (int, error
 func (mw instrumentingMiddleware) Concat(ctx context.Context, a, b string) (string, error) {
 	v, err := mw.next.Concat(ctx, a, b)
 	mw.chars.Add(float64(len(v)))
+	return v, err
+}
+
+func (mw instrumentingMiddleware) Ping(ctx context.Context) (string, error) {
+	v, err := mw.next.Ping(ctx)
+	mw.chars.Add(1)
 	return v, err
 }
