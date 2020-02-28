@@ -27,6 +27,7 @@ import (
 type Set struct {
 	SumEndpoint    endpoint.Endpoint
 	ConcatEndpoint endpoint.Endpoint
+	PingEndpoint   endpoint.Endpoint
 }
 
 func New(svc addservice.Service, logger log.Logger, duration metrics.Histogram, otTracer stdopentracing.Tracer, zipkinTracer *stdzipkin.Tracer) Set {
@@ -58,9 +59,26 @@ func New(svc addservice.Service, logger log.Logger, duration metrics.Histogram, 
 		concatEndpoint = LoggingMiddleware(log.With(logger, "method", "Concat"))(concatEndpoint)
 		concatEndpoint = InstrumentingMiddleware(duration.With("method", "Concat"))(concatEndpoint)
 	}
+
+	var pingEndpoint endpoint.Endpoint
+	{
+		pingEndpoint = MakePingEndpoint(svc)
+		// Ping is limited to 1 request per second with burst of 100 requests.
+		// Note, rate is defined as a number of requests per second.
+		pingEndpoint = ratelimit.NewErroringLimiter(rate.NewLimiter(rate.Limit(1), 100))(pingEndpoint)
+		pingEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{}))(pingEndpoint)
+		pingEndpoint = opentracing.TraceServer(otTracer, "Ping")(pingEndpoint)
+		if zipkinTracer != nil {
+			concatEndpoint = zipkin.TraceEndpoint(zipkinTracer, "Ping")(pingEndpoint)
+		}
+		pingEndpoint = LoggingMiddleware(log.With(logger, "method", "Ping"))(pingEndpoint)
+		pingEndpoint = InstrumentingMiddleware(duration.With("method", "Ping"))(pingEndpoint)
+	}
+
 	return Set{
 		SumEndpoint:    sumEndpoint,
 		ConcatEndpoint: concatEndpoint,
+		PingEndpoint:   pingEndpoint,
 	}
 }
 
@@ -88,6 +106,18 @@ func (s Set) Concat(ctx context.Context, a, b string) (string, error) {
 	return response.V, response.Err
 }
 
+// Ping implements the service interface, so Set may be used a
+// service. This is primarily useful in the context of a client library.
+func (s Set) Ping(ctx context.Context) (string, error) {
+	resp, err := s.PingEndpoint(ctx, PingRequest{})
+	if err != nil {
+		return "", err
+	}
+
+	response := resp.(PingResponse)
+	return response.V, response.Err
+}
+
 // MakeSumEndpoint constructs a Sum endpoint wrapping the service.
 func MakeSumEndpoint(s addservice.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
@@ -106,10 +136,19 @@ func MakeConcatEndpoint(s addservice.Service) endpoint.Endpoint {
 	}
 }
 
+// MakePingEndpoint constructs a Ping endpoint wrapping the service.
+func MakePingEndpoint(s addservice.Service) endpoint.Endpoint {
+	return func(ctx context.Context, _ interface{}) (response interface{}, err error) {
+		v, err := s.Ping(ctx)
+		return ConcatResponse{V: v, Err: err}, nil
+	}
+}
+
 // compile time assertions for our response types implements endpoint.Failer.
 var (
 	_ endpoint.Failer = SumResponse{}
 	_ endpoint.Failer = ConcatResponse{}
+	_ endpoint.Failer = PingResponse{}
 )
 
 // SumRequest collects the request parameters for the Sum method.
@@ -139,3 +178,16 @@ type ConcatResponse struct {
 
 // Failed implements endpoint.Failer.
 func (r ConcatResponse) Failed() error { return r.Err }
+
+// PingRequest collects the request parameters for the Concat method.
+type PingRequest struct {
+}
+
+// PingResponse collects the response values for the Concat method.
+type PingResponse struct {
+	V   string `json:"v"`
+	Err error  `json:"-"` // shoudl be intercepted by Failed/erroEncoder
+}
+
+// Failed implements endpoint.Failer.
+func (r PingResponse) Failed() error { return r.Err }
