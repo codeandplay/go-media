@@ -67,6 +67,42 @@ func NewHTTPHandler(endpoints addendpoint.Set, otTracer stdopentracing.Tracer, z
 		encodeHTTPGenericResponse,
 		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "Ping", logger)))...,
 	))
+
+	m.Handle("/addToDo", httptransport.NewServer(
+		endpoints.AddToDoEndpoint,
+		decodeHTTPAddToDoRequest,
+		encodeHTTPGenericResponse,
+		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "AddToDo", logger)))...,
+	))
+
+	m.Handle("/completeToDo", httptransport.NewServer(
+		endpoints.CompleteToDoEndPoint,
+		decodeHTTPCompleteToDoRequest,
+		encodeHTTPGenericResponse,
+		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "CompleteToDo", logger)))...,
+	))
+
+	m.Handle("/unDoToDo", httptransport.NewServer(
+		endpoints.UnDoToDoEndpoint,
+		decodeHTTPUnDoToDoRequest,
+		encodeHTTPGenericResponse,
+		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "UnDoToDo", logger)))...,
+	))
+
+	m.Handle("/deleteToDo", httptransport.NewServer(
+		endpoints.DeleteToDoEndpoint,
+		decodeHTTPDeleteToDoRequest,
+		encodeHTTPGenericResponse,
+		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "DeleteToDo", logger)))...,
+	))
+
+	m.Handle("/getAllToDo", httptransport.NewServer(
+		endpoints.GetAllToDoEndpoint,
+		decodeHTTPGetAllToDoRequest,
+		encodeHTTPGenericResponse,
+		append(options, httptransport.ServerBefore(opentracing.HTTPToContext(otTracer, "GetAllToDo", logger)))...,
+	))
+
 	return m
 }
 
@@ -170,13 +206,128 @@ func NewHTTPClient(instance string, otTracer stdopentracing.Tracer, zipkinTracer
 		}))(pingEndpoint)
 	}
 
+	// The AddToDo endpoint is the same thing, with slightly different
+	// middlewares to demonstrate how to specialize per-endpoint.
+	var addToDoEndpoint endpoint.Endpoint
+	{
+		addToDoEndpoint = httptransport.NewClient(
+			"POST",
+			copyURL(u, "/addToDo"),
+			encodeHTTPGenericRequest,
+			decodeHTTPAddToDoResponse,
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint()
+		addToDoEndpoint = opentracing.TraceClient(otTracer, "AddToDo")(pingEndpoint)
+		if zipkinTracer != nil {
+			pingEndpoint = zipkin.TraceEndpoint(zipkinTracer, "AddToDo")(pingEndpoint)
+		}
+		addToDoEndpoint = limiter(addToDoEndpoint)
+		addToDoEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:    "AddToDo",
+			Timeout: 10 * time.Second,
+		}))(addToDoEndpoint)
+	}
+
+	// The CompleteToDo endpoint is the same thing, with slightly different
+	// middlewares to demonstrate how to specialize per-endpoint.
+	var completeToDoEndpoint endpoint.Endpoint
+	{
+		completeToDoEndpoint = httptransport.NewClient(
+			"PUT",
+			copyURL(u, "/completeToDo"),
+			encodeHTTPGenericRequest,
+			decodeHTTPCompleteToDoResponse,
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint()
+		completeToDoEndpoint = opentracing.TraceClient(otTracer, "CompleteToDo")(pingEndpoint)
+		if zipkinTracer != nil {
+			pingEndpoint = zipkin.TraceEndpoint(zipkinTracer, "CompleteToDo")(pingEndpoint)
+		}
+		completeToDoEndpoint = limiter(completeToDoEndpoint)
+		completeToDoEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:    "CompleteToDo",
+			Timeout: 10 * time.Second,
+		}))(completeToDoEndpoint)
+	}
+
+	// The UnDoToDo endpoint is the same thing, with slightly different
+	// middlewares to demonstrate how to specialize per-endpoint.
+	var unDoToDoEndpoint endpoint.Endpoint
+	{
+		unDoToDoEndpoint = httptransport.NewClient(
+			"PUT",
+			copyURL(u, "/unDoToDo"),
+			encodeHTTPGenericRequest,
+			decodeHTTPUnDoToDoResponse,
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint()
+		unDoToDoEndpoint = opentracing.TraceClient(otTracer, "UnDoToDo")(pingEndpoint)
+		if zipkinTracer != nil {
+			pingEndpoint = zipkin.TraceEndpoint(zipkinTracer, "UnDoToDo")(pingEndpoint)
+		}
+		unDoToDoEndpoint = limiter(unDoToDoEndpoint)
+		unDoToDoEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:    "UnDoToDo",
+			Timeout: 10 * time.Second,
+		}))(unDoToDoEndpoint)
+	}
+
+	// The DeleteToDo endpoint is the same thing, with slightly different
+	// middlewares to demonstrate how to specialize per-endpoint.
+	var deleteToDoEndpoint endpoint.Endpoint
+	{
+		deleteToDoEndpoint = httptransport.NewClient(
+			"DELETE",
+			copyURL(u, "/deleteToDo"),
+			encodeHTTPGenericRequest,
+			decodeHTTPDeleteToDoResponse,
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint()
+		deleteToDoEndpoint = opentracing.TraceClient(otTracer, "DeleteToDo")(pingEndpoint)
+		if zipkinTracer != nil {
+			pingEndpoint = zipkin.TraceEndpoint(zipkinTracer, "DeleteToDo")(pingEndpoint)
+		}
+		deleteToDoEndpoint = limiter(deleteToDoEndpoint)
+		deleteToDoEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:    "DeleteToDo",
+			Timeout: 10 * time.Second,
+		}))(deleteToDoEndpoint)
+	}
+
+	// The GetAllToDo endpoint is the same thing, with slightly different
+	// middlewares to demonstrate how to specialize per-endpoint.
+	var getAllToDoEndpoint endpoint.Endpoint
+	{
+		getAllToDoEndpoint = httptransport.NewClient(
+			"GET",
+			copyURL(u, "/getAllToDo"),
+			encodeHTTPGenericRequest,
+			decodeHTTPGetAllToDoResponse,
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint()
+		getAllToDoEndpoint = opentracing.TraceClient(otTracer, "GetAllToDo")(pingEndpoint)
+		if zipkinTracer != nil {
+			pingEndpoint = zipkin.TraceEndpoint(zipkinTracer, "GetAllToDo")(pingEndpoint)
+		}
+		getAllToDoEndpoint = limiter(deleteToDoEndpoint)
+		getAllToDoEndpoint = circuitbreaker.Gobreaker(gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:    "GetAllToDo",
+			Timeout: 10 * time.Second,
+		}))(getAllToDoEndpoint)
+	}
+
 	// Returning the endpoint.Set as a service.Service relies on the
 	// endpoint.Set implementing the Service methods. That's just a simple bit
 	// of glue code.
 	return addendpoint.Set{
-		SumEndpoint:    sumEndpoint,
-		ConcatEndpoint: concatEndpoint,
-		PingEndpoint:   pingEndpoint,
+		SumEndpoint:          sumEndpoint,
+		ConcatEndpoint:       concatEndpoint,
+		PingEndpoint:         pingEndpoint,
+		AddToDoEndpoint:      addToDoEndpoint,
+		CompleteToDoEndPoint: completeToDoEndpoint,
+		UnDoToDoEndpoint:     unDoToDoEndpoint,
+		DeleteToDoEndpoint:   deleteToDoEndpoint,
+		GetAllToDoEndpoint:   getAllToDoEndpoint,
 	}, nil
 }
 
@@ -230,10 +381,53 @@ func decodeHTTPConcatRequest(_ context.Context, r *http.Request) (interface{}, e
 }
 
 // decodeHTTPPingRequest is a transport/http.DecodeRequestFunc that decodes a
-// JSON-encoded concat request from the HTTP request body. Primarily useful in a
+// JSON-encoded ping request from the HTTP request body. Primarily useful in a
 // server.
 func decodeHTTPPingRequest(_ context.Context, r *http.Request) (interface{}, error) {
 	return addendpoint.PingRequest{}, nil
+}
+
+// decodeHTTPAddToDoRequest is a transport/http.DecodeRequestFunc that decodes a
+// JSON-encoded addToDo request from the HTTP request body. Primarily useful in a
+// server.
+func decodeHTTPAddToDoRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	var req addendpoint.AddToDoRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
+// decodeHTTPCompleteToDoRequest is a transport/http.DecodeRequestFunc that decodes a
+// JSON-encoded completeToDo request from the HTTP request body. Primarily useful in a
+// server.
+func decodeHTTPCompleteToDoRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	var req addendpoint.CompleteToDoRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
+// decodeHTTPUnDoToDoRequest is a transport/http.DecodeRequestFunc that decodes a
+// JSON-encoded unDoToDo request from the HTTP request body. Primarily useful in a
+// server.
+func decodeHTTPUnDoToDoRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	var req addendpoint.UnDoToDoRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
+// decodeHTTPDeleteToDoRequest is a transport/http.DecodeRequestFunc that decodes a
+// JSON-encoded deleteToDo request from the HTTP request body. Primarily useful in a
+// server.
+func decodeHTTPDeleteToDoRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	var req addendpoint.DeleteToDoRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
+// decodeHTTPGetAllToDoRequest is a transport/http.DecodeRequestFunc that decodes a
+// JSON-encoded getAllToDo request from the HTTP request body. Primarily useful in a
+// server.
+func decodeHTTPGetAllToDoRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	return addendpoint.GetAllToDoRequest{}, nil
 }
 
 // decodeHTTPSumResponse is a transport/http.DecodeResponseFunc that decodes a
@@ -274,6 +468,76 @@ func decodeHTTPPingResponse(_ context.Context, r *http.Response) (interface{}, e
 		return nil, errors.New(r.Status)
 	}
 	var resp addendpoint.PingResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
+	return resp, err
+}
+
+// decodeHTTPAddToDoResponse is a transport/http.DecodeResponseFunc that decodes
+// a JSON-encoded concat response from the HTTP response body. If the response
+// has a non-200 status code, we will interpret that as an error and attempt to
+// decode the specific error message from the response body. Primarily useful in
+// a client.
+func decodeHTTPAddToDoResponse(_ context.Context, r *http.Response) (interface{}, error) {
+	if r.StatusCode != http.StatusOK {
+		return nil, errors.New(r.Status)
+	}
+	var resp addendpoint.AddToDoResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
+	return resp, err
+}
+
+// decodeHTTPCompleteToDoResponse is a transport/http.DecodeResponseFunc that decodes
+// a JSON-encoded concat response from the HTTP response body. If the response
+// has a non-200 status code, we will interpret that as an error and attempt to
+// decode the specific error message from the response body. Primarily useful in
+// a client.
+func decodeHTTPCompleteToDoResponse(_ context.Context, r *http.Response) (interface{}, error) {
+	if r.StatusCode != http.StatusOK {
+		return nil, errors.New(r.Status)
+	}
+	var resp addendpoint.CompleteToDoResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
+	return resp, err
+}
+
+// decodeHTTPUnDoToDoResponse is a transport/http.DecodeResponseFunc that decodes
+// a JSON-encoded concat response from the HTTP response body. If the response
+// has a non-200 status code, we will interpret that as an error and attempt to
+// decode the specific error message from the response body. Primarily useful in
+// a client.
+func decodeHTTPUnDoToDoResponse(_ context.Context, r *http.Response) (interface{}, error) {
+	if r.StatusCode != http.StatusOK {
+		return nil, errors.New(r.Status)
+	}
+	var resp addendpoint.UnDoToDoResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
+	return resp, err
+}
+
+// decodeHTTPDeleteToDoResponse is a transport/http.DecodeResponseFunc that decodes
+// a JSON-encoded concat response from the HTTP response body. If the response
+// has a non-200 status code, we will interpret that as an error and attempt to
+// decode the specific error message from the response body. Primarily useful in
+// a client.
+func decodeHTTPDeleteToDoResponse(_ context.Context, r *http.Response) (interface{}, error) {
+	if r.StatusCode != http.StatusOK {
+		return nil, errors.New(r.Status)
+	}
+	var resp addendpoint.DeleteToDoResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
+	return resp, err
+}
+
+// decodeHTTPGetAllToDoResponse is a transport/http.DecodeResponseFunc that decodes
+// a JSON-encoded concat response from the HTTP response body. If the response
+// has a non-200 status code, we will interpret that as an error and attempt to
+// decode the specific error message from the response body. Primarily useful in
+// a client.
+func decodeHTTPGetAllToDoResponse(_ context.Context, r *http.Response) (interface{}, error) {
+	if r.StatusCode != http.StatusOK {
+		return nil, errors.New(r.Status)
+	}
+	var resp addendpoint.GetAllToDoResponse
 	err := json.NewDecoder(r.Body).Decode(&resp)
 	return resp, err
 }

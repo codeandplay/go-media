@@ -101,6 +101,7 @@ func main() {
 	// Create the (sparse) metrics we'll use in the service. They, too, are
 	// dependencies that we pass to components that use them.
 	var ints, chars metrics.Counter
+	var cubTodo, getTodo metrics.Histogram
 	{
 		// Business-level metrics.
 		ints = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
@@ -115,7 +116,20 @@ func main() {
 			Name:      "characters_concatenated",
 			Help:      "Total count of characters concatenated via the Concat method.",
 		}, []string{})
+		cubTodo = prometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+			Namespace: "example",
+			Subsystem: "addsvc",
+			Name:      "create_update_delete_todo_request_duration_seconds",
+			Help:      "Create update delete todo request duration in seconds.",
+		}, []string{"method", "error"})
+		getTodo = prometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+			Namespace: "example",
+			Subsystem: "addsvc",
+			Name:      "get_todo_request_duration_seconds",
+			Help:      "Get todo request duration in seconds.",
+		}, []string{"method", "error"})
 	}
+
 	var duration metrics.Histogram
 	{
 		// Endpoint-level metrics.
@@ -135,7 +149,7 @@ func main() {
 	// the interfaces that the transports expect. Note that we're not binding
 	// them to ports or anything yet; we'll do that next.
 	var (
-		service     = addservice.New(logger, ints, chars)
+		service     = addservice.New(logger, ints, chars, cubTodo, getTodo)
 		endpoints   = addendpoint.New(service, logger, duration, tracer, zipkinTracer)
 		httpHandler = addtransport.NewHTTPHandler(endpoints, tracer, zipkinTracer, logger)
 	)

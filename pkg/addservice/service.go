@@ -7,6 +7,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
 
+	"ray.vhatt/todo-gokit/pkg/models"
 	"ray.vhatt/todo-gokit/pkg/store"
 )
 
@@ -15,15 +16,20 @@ type Service interface {
 	Sum(ctx context.Context, a, b int) (int, error)
 	Concat(ctx context.Context, a, b string) (string, error)
 	Ping(ctx context.Context) (string, error)
+	AddToDo(ctx context.Context, task models.ToDoItem) (string, error)
+	CompleteToDo(ctx context.Context, taskId string) (string, error)
+	UnDoToDo(ctx context.Context, taskId string) (string, error)
+	DeleteToDo(ctx context.Context, taskId string) (string, error)
+	GetAllToDo(ctx context.Context) ([]models.ToDoItem, error)
 }
 
 // New return a basic Service with all the expected middlewares wired in.
-func New(logger log.Logger, ints, chars metrics.Counter) Service {
+func New(logger log.Logger, ints, chars metrics.Counter, cubTodo, getTodo metrics.Histogram) Service {
 	var svc Service
 	{
 		svc = NewBasicService()
 		svc = LoggingMiddleware(logger)(svc)
-		svc = InstrumentingMiddleware(ints, chars)(svc)
+		svc = InstrumentingMiddleware(ints, chars, cubTodo, getTodo)(svc)
 	}
 
 	return svc
@@ -87,4 +93,47 @@ func (s basicService) Ping(ctx context.Context) (string, error) {
 		return "down", nil
 	}
 	return "up", nil
+}
+
+func (s basicService) AddToDo(ctx context.Context, task models.ToDoItem) (string, error) {
+	insertResult, err := s.dbStore.InsertToDo(ctx, task)
+	if err != nil {
+		return "", err
+	}
+	return insertResult, nil
+}
+
+func (s basicService) CompleteToDo(ctx context.Context, taskID string) (string, error) {
+	resultID, err := s.dbStore.CompleteToDo(ctx, taskID)
+	if err != nil {
+		return "", err
+	}
+
+	return resultID, nil
+}
+
+func (s basicService) UnDoToDo(ctx context.Context, taskID string) (string, error) {
+	resultID, err := s.dbStore.UnDoToDo(ctx, taskID)
+	if err != nil {
+		return "", err
+	}
+
+	return resultID, nil
+}
+
+func (s basicService) DeleteToDo(ctx context.Context, taskID string) (string, error) {
+	resultID, err := s.dbStore.DeleteToDo(ctx, taskID)
+	if err != nil {
+		return "", err
+	}
+
+	return resultID, nil
+}
+
+func (s basicService) GetAllToDo(ctx context.Context) ([]models.ToDoItem, error) {
+	results, err := s.dbStore.GetAllToDo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
