@@ -6,6 +6,7 @@ require (
 	github.com/apache/thrift v0.13.0
 	github.com/go-kit/kit v0.10.0
 	github.com/lightstep/lightstep-tracer-go v0.18.1
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/oklog/oklog v0.3.2
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5
@@ -13,6 +14,7 @@ require (
 	github.com/pact-foundation/pact-go v1.0.4
 	github.com/prometheus/client_golang v1.3.0
 	github.com/sony/gobreaker v0.4.1
+	github.com/spf13/pflag v1.0.3 // indirect
 	go.mongodb.org/mongo-driver v1.3.0
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/grpc v1.26.0
